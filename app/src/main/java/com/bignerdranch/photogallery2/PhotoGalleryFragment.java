@@ -6,6 +6,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 
 import androidx.fragment.app.Fragment;
@@ -42,12 +43,32 @@ public class PhotoGalleryFragment extends Fragment {
         return v;
     }
 
+    private class PhotoHolder extends RecyclerView.ViewHolder {
+
+        private TextView mTitleTextView;
+
+        public PhotoHolder(View itemView) {
+            super(itemView);
+            mTitleTextView = (TextView) itemView;
+        }
+
+        public void bindGalleryItem(GalleryItem item){
+            mTitleTextView.setText(item.toString());
+        }
+    }
+
+    private class PhotoAdapter extends RecyclerView.Adapter<PhotoHolder>{
+
+
+
+    }
+
     private class FetchItemsTask extends AsyncTask<Void, Void, Void> {
 
 
         @Override
         protected Void doInBackground(Void... params) {
-          new FlickrFetchr().fetchItems();
+            new FlickrFetchr().fetchItems();
             return null;
         }
     }
