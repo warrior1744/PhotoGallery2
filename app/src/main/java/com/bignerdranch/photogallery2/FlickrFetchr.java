@@ -38,7 +38,6 @@ public class FlickrFetchr {
 
  ByteArrayOutputStream.write(byte[] b, int off, int len)
  Writes len bytes from the specified byte array starting at offset off to this byte array output stream.
-
  */
             int bytesRead = 0;
             byte[] buffer = new byte[1024];
@@ -100,9 +99,6 @@ public class FlickrFetchr {
 
             item.setUrl(photoJsonObject.getString("url_s"));
             items.add(item);
-
         }
-
-
     }
 }

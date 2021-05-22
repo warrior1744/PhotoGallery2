@@ -1,11 +1,12 @@
 package com.bignerdranch.photogallery2;
 
+import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
+import android.widget.ImageView;
 
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -22,7 +23,6 @@ public class PhotoGalleryFragment extends Fragment {
     private List<GalleryItem> mItems = new ArrayList<>();
 
     public static PhotoGalleryFragment newInstance() {
-
         return new PhotoGalleryFragment();
     }
 
@@ -31,7 +31,7 @@ public class PhotoGalleryFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
         new FetchItemsTask().execute();
-    }
+    }//end onCreate() method
 
 
     @Override
@@ -43,28 +43,31 @@ public class PhotoGalleryFragment extends Fragment {
 
         setupAdapter();
         return v;
-    }
+    }//end onCreateView() method
 
     private void setupAdapter(){
         if(isAdded()){
             mPhotoRecyclerView.setAdapter(new PhotoAdapter(mItems));
         }
-    }
+    }//end setupAdapter() method
 
+
+    /*******************************************************************/
     private class PhotoHolder extends RecyclerView.ViewHolder {
 
-        private TextView mTitleTextView;
+        private ImageView mItemImageView;
 
         public PhotoHolder(View itemView) {
             super(itemView);
-            mTitleTextView = (TextView) itemView;
+            mItemImageView = (ImageView) itemView.findViewById(R.id.item_image_view);
         }
 
-        public void bindGalleryItem(GalleryItem item) {
-            mTitleTextView.setText(item.toString());
+        public void bindDrawable(Drawable drawable) {
+            mItemImageView.setImageDrawable(drawable);
         }
-    }
-
+    }//end inner class PhotoHolder
+    /*******************************************************************/
+    /*******************************************************************/
     private class PhotoAdapter extends RecyclerView.Adapter<PhotoHolder> {
 
         private List<GalleryItem> mGalleryItems;
@@ -75,22 +78,25 @@ public class PhotoGalleryFragment extends Fragment {
 
         @Override
         public PhotoHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            TextView textView = new TextView(getActivity());
-            return new PhotoHolder(textView);
+         LayoutInflater inflater = LayoutInflater.from(getActivity());
+         View view = inflater.inflate(R.layout.list_item_gallery, parent, false);
+         return new PhotoHolder(view);
+
         }
 
         @Override
         public void onBindViewHolder(PhotoHolder photoHolder, int position) {
-            GalleryItem galleryItem = mGalleryItems.get(position);
-            photoHolder.bindGalleryItem(galleryItem);
+            Drawable placeHolder = getResources().getDrawable(R.drawable.megaman);
+            photoHolder.bindDrawable(placeHolder);
         }
 
         @Override
         public int getItemCount() {
             return mGalleryItems.size();
         }
-    }
-
+    }//end inner class PhotoAdapter
+    /*******************************************************************/
+    /*******************************************************************/
     private class FetchItemsTask extends AsyncTask<Void, Void, List<GalleryItem>> {
 
         @Override
@@ -103,7 +109,7 @@ public class PhotoGalleryFragment extends Fragment {
             mItems = galleryItems;
             setupAdapter();
         }
-    }
-
+    }//end inner class FetchItemsTask
+    /*******************************************************************/
 
 }
