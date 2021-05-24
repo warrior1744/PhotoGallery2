@@ -1,13 +1,20 @@
 package com.bignerdranch.photogallery2;
 
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.SearchView;
 
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -32,9 +39,17 @@ public class PhotoGalleryFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
-        new FetchItemsTask().execute();
-
-        mThumbnailDownloader = new ThumbnailDownloader<>();
+        setHasOptionsMenu(true);
+        updateItems();
+        Handler responseHandler = new Handler();
+        mThumbnailDownloader = new ThumbnailDownloader<>(responseHandler);
+        mThumbnailDownloader.setThumbnailDownloadListener(new ThumbnailDownloader.ThumbnailDownloadListener<PhotoHolder>() {
+            @Override
+            public void onThumbnailDownloaded(PhotoHolder photoHolder, Bitmap bitmap) {
+                Drawable drawable = new BitmapDrawable(getResources(), bitmap);
+                photoHolder.bindDrawable(drawable);
+            }
+        });
         mThumbnailDownloader.start();
         mThumbnailDownloader.getLooper();
         Log.i(TAG, "Background thread started");
@@ -52,12 +67,17 @@ public class PhotoGalleryFragment extends Fragment {
         return v;
     }//end onCreateView() method
 
-    private void setupAdapter(){
-        if(isAdded()){
+    private void setupAdapter() {
+        if (isAdded()) {
             mPhotoRecyclerView.setAdapter(new PhotoAdapter(mItems));
         }
     }//end setupAdapter() method
 
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        mThumbnailDownloader.clearQueue();
+    }
 
     @Override
     public void onDestroy() {
@@ -65,6 +85,35 @@ public class PhotoGalleryFragment extends Fragment {
         mThumbnailDownloader.quit();
         Log.i(TAG, "Background thread destroyed");
     }//end onDestroy()
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater menuInflater) {
+        super.onCreateOptionsMenu(menu, menuInflater);
+        menuInflater.inflate(R.menu.fragment_photo_gallery, menu);
+
+        MenuItem searchItem = menu.findItem(R.id.menu_item_search);
+                // app:actionViewClass="androidx.appcompat.widget.SearchView"
+        final SearchView searchView = (SearchView) searchItem.getActionView();
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String s) {
+                Log.d(TAG, "QueryTextSubmit: "+s);
+                updateItems();
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String s) {
+                Log.d(TAG, "QueryTextChange: "+s);
+                return false;
+            }
+        });
+    }
+
+    private void updateItems(){
+        new FetchItemsTask().execute();
+    }
 
     /*******************************************************************/
     private class PhotoHolder extends RecyclerView.ViewHolder {
@@ -92,9 +141,9 @@ public class PhotoGalleryFragment extends Fragment {
 
         @Override
         public PhotoHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-         LayoutInflater inflater = LayoutInflater.from(getActivity());
-         View view = inflater.inflate(R.layout.list_item_gallery, parent, false);
-         return new PhotoHolder(view);
+            LayoutInflater inflater = LayoutInflater.from(getActivity());
+            View view = inflater.inflate(R.layout.list_item_gallery, parent, false);
+            return new PhotoHolder(view);
 
         }
 
@@ -117,7 +166,14 @@ public class PhotoGalleryFragment extends Fragment {
 
         @Override
         protected List<GalleryItem> doInBackground(Void... params) {
-            return new FlickrFetchr().fetchItems();
+         //   return new FlickrFetchr().fetchItems();
+            String query = "robot";
+
+            if(query == null){
+                return new FlickrFetchr().fetchRecentPhotos();
+            }else {
+                return new FlickrFetchr().searchPhotos(query);
+            }
         }
 
         @Override
