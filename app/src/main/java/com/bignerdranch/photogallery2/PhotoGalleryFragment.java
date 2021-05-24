@@ -92,27 +92,41 @@ public class PhotoGalleryFragment extends Fragment {
         menuInflater.inflate(R.menu.fragment_photo_gallery, menu);
 
         MenuItem searchItem = menu.findItem(R.id.menu_item_search);
-                // app:actionViewClass="androidx.appcompat.widget.SearchView"
+        // app:actionViewClass="androidx.appcompat.widget.SearchView"
         final SearchView searchView = (SearchView) searchItem.getActionView();
 
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String s) {
-                Log.d(TAG, "QueryTextSubmit: "+s);
+                Log.d(TAG, "QueryTextSubmit: " + s);
+                QueryPreferences.setStoredQuery(getActivity(), s);
                 updateItems();
                 return true;
             }
 
             @Override
             public boolean onQueryTextChange(String s) {
-                Log.d(TAG, "QueryTextChange: "+s);
+                Log.d(TAG, "QueryTextChange: " + s);
                 return false;
             }
         });
     }
 
-    private void updateItems(){
-        new FetchItemsTask().execute();
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.menu_item_clear:
+                QueryPreferences.setStoredQuery(getActivity(), null);
+                updateItems();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void updateItems() {
+        String query = QueryPreferences.getStoredQuery(getActivity());
+        new FetchItemsTask(query).execute();
     }
 
     /*******************************************************************/
@@ -164,15 +178,22 @@ public class PhotoGalleryFragment extends Fragment {
     /*******************************************************************/
     private class FetchItemsTask extends AsyncTask<Void, Void, List<GalleryItem>> {
 
+        private String mQuery;
+
+
+        public FetchItemsTask(String query){
+            mQuery = query;
+        }
+
         @Override
         protected List<GalleryItem> doInBackground(Void... params) {
-         //   return new FlickrFetchr().fetchItems();
-            String query = "robot";
+            //   return new FlickrFetchr().fetchItems();
+            //   String query = "robot";
 
-            if(query == null){
+            if (mQuery == null) {
                 return new FlickrFetchr().fetchRecentPhotos();
-            }else {
-                return new FlickrFetchr().searchPhotos(query);
+            } else {
+                return new FlickrFetchr().searchPhotos(mQuery);
             }
         }
 

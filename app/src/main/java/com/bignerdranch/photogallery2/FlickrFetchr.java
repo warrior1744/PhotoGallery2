@@ -65,6 +65,7 @@ private static final Uri ENDPOINT = Uri.parse("https://www.flickr.com/services/r
         return new String(getUrlBytes(urlSpec));
     }
 
+    /**One of these would be called upon FlickrFetchr.class */
     public List<GalleryItem> fetchRecentPhotos(){
         String url = buildUrl(FETCH_RECENTS_METHOD, null);
         return downloadGalleryItems(url);
