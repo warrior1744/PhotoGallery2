@@ -7,6 +7,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import android.util.LruCache;
 
 import androidx.annotation.NonNull;
 
@@ -17,6 +18,7 @@ public class ThumbnailDownloader<T> extends HandlerThread {
 
     private static final String TAG = "ThumbnailDownloader";
     private static final int MESSAGE_DOWNLOAD = 0;
+    private static final int MESSAGE_PRELOAD = 1;//Challenge:Preloading and Caching
 
     private boolean mHasQuit = false;
     private Handler mRequestHandler;
@@ -24,6 +26,8 @@ public class ThumbnailDownloader<T> extends HandlerThread {
 
     private Handler mResponseHandler;
     private ThumbnailDownloadListener<T> mThumbnailDownloadListener;
+
+    public LruCache<String, Bitmap> mLruCache = new LruCache<>(50);//Challenge:Preloading and Caching
 
     public interface ThumbnailDownloadListener<T>{
         void onThumbnailDownloaded(T target, Bitmap thumbnail);
@@ -58,9 +62,18 @@ public class ThumbnailDownloader<T> extends HandlerThread {
 
             //4.call sendToTarget() to send the Message to its Handler.(the Handler now has the message)
             //5.The Handler will then put the Message on the end of Loop's message queue.
-            mRequestHandler.obtainMessage(MESSAGE_DOWNLOAD, target).sendToTarget();
+            mRequestHandler.obtainMessage(MESSAGE_DOWNLOAD, target)
+                    .sendToTarget();
         }
     }//end queueThumbnail
+
+
+    /*************Challenge: Preloading and Caching************/
+    public void preloadPhoto(String url){
+        Log.i(TAG, "Preload from URL: "+url);
+        mRequestHandler.obtainMessage(MESSAGE_PRELOAD, url).sendToTarget();
+    }
+    /**************************************************************/
 
     //Handling the message:
     //You obtained a message directly from mRequestHandler, which automatically sets
@@ -79,7 +92,18 @@ public class ThumbnailDownloader<T> extends HandlerThread {
                     T target = (T) msg.obj;
                     Log.i(TAG, "Got a request for URL: " + mRequestMap.get(target));
                     handleRequest(target);
+                    /*************Challenge: Preloading and Caching************/
+                }else if (msg.what == MESSAGE_PRELOAD){
+                    String url = (String) msg.obj;
+                    Log.i(TAG, "Preload request: "+url);
+                    try{
+                        byte[] bitmapBytes = new FlickrFetchr().getUrlBytes(url);
+                        final Bitmap bitmap = BitmapFactory.decodeByteArray(bitmapBytes, 0 ,bitmapBytes.length);
+                    }catch (IOException ioe){
+                        ioe.printStackTrace();
+                    }
                 }
+                /**************************************************************/
             }
         };
     }//end onLooperPrepared()
@@ -94,11 +118,19 @@ public class ThumbnailDownloader<T> extends HandlerThread {
             if (url == null) {
                 return;
             }
-            byte[] bitmapBytes = new FlickrFetchr().getUrlBytes(url);
-            final Bitmap bitmap = BitmapFactory
-                    .decodeByteArray(bitmapBytes, 0, bitmapBytes.length);
-            Log.i(TAG, "Bitmap created");
-
+            final Bitmap bitmap;
+            /*************Challenge: Preloading and Caching****************/
+            if(mLruCache.get(url) == null) {
+                byte[] bitmapBytes = new FlickrFetchr().getUrlBytes(url);
+                bitmap = BitmapFactory
+                        .decodeByteArray(bitmapBytes, 0, bitmapBytes.length);
+                mLruCache.put(url, bitmap);
+                Log.i(TAG, "Bitmap created");
+            }else{
+                bitmap = mLruCache.get(url);
+                Log.i(TAG, "Bitmap used again");
+            }
+            /**************************************************************/
             mResponseHandler.post(new Runnable() {
                 @Override
                 public void run() {

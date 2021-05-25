@@ -3,6 +3,9 @@ package com.bignerdranch.photogallery2;
 import android.net.Uri;
 import android.util.Log;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -68,14 +71,29 @@ public class FlickrFetchr {
     /**
      * One of these would be called upon FlickrFetchr.class
      */
-    public List<GalleryItem> fetchRecentPhotos() {
-        String url = buildUrl(FETCH_RECENTS_METHOD, null);
+
+    public List<GalleryItem> fetchRecentPhotos(int page) {
+        String url = buildUrl(FETCH_RECENTS_METHOD, null, page);
         return downloadGalleryItems(url);
     }
 
-    public List<GalleryItem> searchPhotos(String query) {
-        String url = buildUrl(SEARCH_METHOD, query);
+    public List<GalleryItem> searchPhotos(String query, int page) {
+        String url = buildUrl(SEARCH_METHOD, query, page);
         return downloadGalleryItems(url);
+    }
+
+    private String buildUrl(String method, String query, int page) {
+        Uri.Builder uriBuilder = ENDPOINT.buildUpon().appendQueryParameter("method", method);
+
+        if (method.equals(SEARCH_METHOD)) {
+            uriBuilder.appendQueryParameter("text", query)
+                      .appendQueryParameter("page", String.valueOf(page));
+
+        } else if (method.equals(FETCH_RECENTS_METHOD)) {
+            uriBuilder.appendQueryParameter("page", String.valueOf(page));
+        }
+
+        return uriBuilder.build().toString();
     }
 
     public List<GalleryItem> downloadGalleryItems(String url) {
@@ -94,21 +112,23 @@ public class FlickrFetchr {
         return items;
     }
 
-    private String buildUrl(String method, String query) {
-        Uri.Builder uriBuilder = ENDPOINT.buildUpon().appendQueryParameter("method", method);
-
-        if (method.equals(SEARCH_METHOD)) {
-            uriBuilder.appendQueryParameter("text", query);
-        }
-
-        return uriBuilder.build().toString();
-    }
 
     private void parseItems(List<GalleryItem> items, JSONObject jsonBody) throws IOException, JSONException {
 
         JSONObject photosJsonObject = jsonBody.getJSONObject("photos");
         JSONArray photoJsonArray = photosJsonObject.getJSONArray("photo");
 
+
+        /**Challenge: Gson**************************************/
+        Gson gson = new GsonBuilder().create();
+        GalleryItem[] galleryItems = gson.fromJson(photoJsonArray.toString(), GalleryItem[].class);
+        for (GalleryItem item : galleryItems) {
+            if (item.getUrl() != null) {
+                items.add(item);
+            }
+            ;
+        }
+        /*
         for (int i = 0; i < photoJsonArray.length(); i++) {
             JSONObject photoJsonObject = photoJsonArray.getJSONObject(i);
 
@@ -123,5 +143,7 @@ public class FlickrFetchr {
             item.setUrl(photoJsonObject.getString("url_s"));
             items.add(item);
         }
+         */
+        /*****************************************************/
     }
 }

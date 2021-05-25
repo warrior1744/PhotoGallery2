@@ -1,5 +1,6 @@
 package com.bignerdranch.photogallery2;
 
+import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -13,7 +14,10 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 
 import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.Fragment;
@@ -30,6 +34,12 @@ public class PhotoGalleryFragment extends Fragment {
     private RecyclerView mPhotoRecyclerView;
     private List<GalleryItem> mItems = new ArrayList<>();
     private ThumbnailDownloader<PhotoHolder> mThumbnailDownloader;
+    private GridLayoutManager mLayoutManager;
+
+    private int mCurrentPage;
+    /***Challenge: Paging**/
+
+    private ProgressBar mProgressBar;
 
     public static PhotoGalleryFragment newInstance() {
         return new PhotoGalleryFragment();
@@ -40,6 +50,7 @@ public class PhotoGalleryFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
         setHasOptionsMenu(true);
+        mCurrentPage = 1; /***Challenge: Paging**/
         updateItems();
         Handler responseHandler = new Handler();
         mThumbnailDownloader = new ThumbnailDownloader<>(responseHandler);
@@ -61,9 +72,48 @@ public class PhotoGalleryFragment extends Fragment {
 
         View v = inflater.inflate(R.layout.fragment_photo_gallery, container, false);
         mPhotoRecyclerView = (RecyclerView) v.findViewById(R.id.photo_recycler_view);
-        mPhotoRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 3));
+        mLayoutManager = new GridLayoutManager(getActivity(), 3);
+        mPhotoRecyclerView.setLayoutManager(mLayoutManager);
+
+        /***Challenge: Paging**/
+        mPhotoRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+            }
+
+            @Override
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                if (!recyclerView.canScrollVertically(1)) {
+                    updateItems();
+                }
+            }
+        });
+
+        /****Challenge: Polish your App Some more**********/
+        mProgressBar = (ProgressBar) v.findViewById(R.id.progress_bar);
+        mProgressBar.setVisibility(View.GONE);
+        /**************************************************/
 
         setupAdapter();
+
+
+        /**Challenge: Dynamically Adjusting the Number of Columns**************************************/
+        mPhotoRecyclerView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                int numberOfColumns = 1;
+                int width = mPhotoRecyclerView.getWidth();
+                int widthOfSingleElement = 240;
+                if (width > widthOfSingleElement) {
+                    numberOfColumns = width / widthOfSingleElement;
+                }
+                mLayoutManager.setSpanCount(numberOfColumns);
+                Log.i(TAG, "numberOfColumns:" + numberOfColumns);
+
+            }
+        });
+        /**********************************************************************************************/
         return v;
     }//end onCreateView() method
 
@@ -100,6 +150,11 @@ public class PhotoGalleryFragment extends Fragment {
             public boolean onQueryTextSubmit(String s) {
                 Log.d(TAG, "QueryTextSubmit: " + s);
                 QueryPreferences.setStoredQuery(getActivity(), s);
+                hideKeyboard(getActivity());
+                searchView.setQuery("", false);
+                searchView.clearFocus();
+                searchView.setIconified(true);
+                mCurrentPage = 1;/***Challenge: Paging**/
                 updateItems();
                 return true;
             }
@@ -121,7 +176,6 @@ public class PhotoGalleryFragment extends Fragment {
     }
 
 
-
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
@@ -136,7 +190,7 @@ public class PhotoGalleryFragment extends Fragment {
 
     private void updateItems() {
         String query = QueryPreferences.getStoredQuery(getActivity());
-        new FetchItemsTask(query).execute();
+        new FetchItemsTask(query).execute(mCurrentPage++);
     }
 
     /*******************************************************************/
@@ -174,10 +228,36 @@ public class PhotoGalleryFragment extends Fragment {
         @Override
         public void onBindViewHolder(PhotoHolder photoHolder, int position) {
             GalleryItem galleryItem = mGalleryItems.get(position);
-            Drawable placeHolder = getResources().getDrawable(R.drawable.megaman);
-            photoHolder.bindDrawable(placeHolder);
+
+            /*************Challenge: Preloading and Caching****************/
+            Drawable drawable;
+
+            if (mThumbnailDownloader.mLruCache.get(galleryItem.getUrl()) == null) {
+                drawable = getResources().getDrawable(R.drawable.megaman);
+            } else {
+                drawable = new BitmapDrawable(mThumbnailDownloader.mLruCache.get(galleryItem.getUrl()));
+            }
+
+            photoHolder.bindDrawable(drawable);
             mThumbnailDownloader.queueThumbnail(photoHolder, galleryItem.getUrl());
+            for (int i = position - 10; i < position + 10; i++) {
+
+                int finalI = i;
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        if (finalI >= 0 && finalI < mGalleryItems.size()) {
+                            GalleryItem item = mGalleryItems.get(finalI);
+                            if (mThumbnailDownloader.mLruCache.get(item.getUrl()) == null) {
+                                mThumbnailDownloader.preloadPhoto(item.getUrl());
+                            }
+                        }
+                    }
+                };
+            }
         }
+
+        /*************Challenge: Preloading and Caching****************/
 
         @Override
         public int getItemCount() {
@@ -186,33 +266,54 @@ public class PhotoGalleryFragment extends Fragment {
     }//end inner class PhotoAdapter
     /*******************************************************************/
     /*******************************************************************/
-    private class FetchItemsTask extends AsyncTask<Void, Void, List<GalleryItem>> {
+    private class FetchItemsTask extends AsyncTask<Integer, Void, List<GalleryItem>> {
 
         private String mQuery;
 
 
-        public FetchItemsTask(String query){
+        public FetchItemsTask(String query) {
             mQuery = query;
         }
 
         @Override
-        protected List<GalleryItem> doInBackground(Void... params) {
+        protected void onPreExecute() {
+            if (mProgressBar != null) {
+                mProgressBar.setVisibility(View.VISIBLE);
+            }
+        }
+
+        @Override
+        protected List<GalleryItem> doInBackground(Integer... pageNumber) {
             //   return new FlickrFetchr().fetchItems();
             //   String query = "robot";
 
             if (mQuery == null) {
-                return new FlickrFetchr().fetchRecentPhotos();
+                return new FlickrFetchr().fetchRecentPhotos(pageNumber[0]);
             } else {
-                return new FlickrFetchr().searchPhotos(mQuery);
+                return new FlickrFetchr().searchPhotos(mQuery, pageNumber[0]);
             }
         }
 
         @Override
         protected void onPostExecute(List<GalleryItem> galleryItems) {
-            mItems = galleryItems;
+            //mItems.addAll(galleryItems); /***Challenge: Paging**/
+            mItems = galleryItems;    /***Challenge: Paging**/
             setupAdapter();
+            if (mProgressBar == null) {
+                mProgressBar.setVisibility(View.GONE);
+            }
         }
     }//end inner class FetchItemsTask
+
     /*******************************************************************/
+
+    public static void hideKeyboard(Activity activity) {
+        InputMethodManager imm = (InputMethodManager) activity.getSystemService(Activity.INPUT_METHOD_SERVICE);
+        View view = activity.getCurrentFocus();
+        if (view == null) {
+            view = new View(activity);
+        }
+        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+    }
 
 }
